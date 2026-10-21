@@ -1,6 +1,8 @@
 # DeepMirror Capture
 
-Qt 6 Widgets / C++17 RGB-D 采集工作台。Mac 保留模拟模式；Windows 构建包含官方 SDK 后端，可选择真实设备。**Mac 编译、离线算法与模拟 UI 已验证；Windows 编译和相机联机验收尚未进行。**
+Qt 6 Widgets / C++17 RGB-D 采集工作台。Mac 保留模拟模式；Windows 构建包含官方 SDK 后端，可选择真实设备。**Mac 模拟模式及 Windows 编译、离线测试、打包自检已验证；真实相机联机验收尚未完成。**
+
+Windows 上接相机请按 [Windows 相机采集测试步骤](docs/windows-camera-test.md) 操作，包含开启深度、选择真实设备、预览与保存验证。
 
 ## Mac 构建与启动
 
