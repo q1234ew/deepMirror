@@ -4,6 +4,7 @@
 #include <QString>
 #include <QJsonObject>
 #include <memory>
+#include "uvc_discovery.h"
 struct Point { float x,y,z; QRgb color; };
 struct Frame {
     QImage rgb, depth, depthPreview;
@@ -32,4 +33,4 @@ public:
 QString saveFrame(const Frame &frame, const QString &root);
 int selfTest(const QString &root);
 
-std::unique_ptr<FrameSource> createWindowsSource();
+std::unique_ptr<FrameSource> createWindowsSource(const UvcPair &selection);

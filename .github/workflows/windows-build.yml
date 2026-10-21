@@ -43,7 +43,7 @@ jobs:
           $ErrorActionPreference = 'Stop'
           New-Item -ItemType Directory -Force dist | Out-Null
           Get-ChildItem build-windows/Release | Where-Object {
-            $_.Name -notmatch '\.(lib|exp|pdb|ilk)$' -and $_.Name -ne 'processing_test.exe'
+            $_.Name -notmatch '\.(lib|exp|pdb|ilk)$' -and $_.Name -notin @('processing_test.exe', 'uvc_matching_test.exe')
           } | Copy-Item -Destination dist -Recurse
           Copy-Item README.md dist/README.md
           ./scripts/package-docs.ps1 -PackageDir "$PWD/dist"
@@ -84,7 +84,7 @@ jobs:
           $probe.Refresh()
           if ($probe.ExitCode -ne 0) { throw "Device diagnostics failed: $($probe.ExitCode)" }
           $report = Get-Content $inventory -Raw -Encoding utf8
-          if ($report -notmatch 'DirectShow' -or $report -notmatch 'VID_3652') { throw 'Device diagnostics report is incomplete' }
+          if ($report -notmatch 'DirectShow' -or $report -notmatch 'VID_3652' -or $report -notmatch 'UVC 自动发现') { throw 'Device diagnostics report is incomplete' }
 
       - name: Publish private repository build download
         if: github.event_name != 'pull_request'

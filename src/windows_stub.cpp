@@ -1,2 +1,2 @@
 #include "capture.h"
-std::unique_ptr<FrameSource> createWindowsSource(){return {};}
+std::unique_ptr<FrameSource> createWindowsSource(const UvcPair &){return {};}

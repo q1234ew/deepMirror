@@ -1,6 +1,7 @@
 #include "capture.h"
 #include "diagnostics.h"
 #include "device_diagnostics.h"
+#include "uvc_picker.h"
 #include <QtWidgets>
 #include <QOpenGLWidget>
 #include <QtConcurrent>
@@ -26,6 +27,7 @@ public:
  }
 };
 class Window:public QMainWindow {
+ std::optional<UvcPair> selectedUvc;
  QTimer timer,recordTimer;std::unique_ptr<FrameSource> source;QComboBox *mode;QLabel *badge;QGroupBox *rgbPanel;QElapsedTimer freshness;bool stopping=false;QString lastMessage;std::shared_ptr<Frame> frame;
  ImageView *rgb,*depth;CloudView *cloud;QPushButton *start,*snap,*record;QLabel *status,*stats;QLineEdit *path;QTextEdit *log;QSpinBox *fps,*interval;QFutureWatcher<QString> writer;bool recording=false;quint64 saved=0;bool pendingClose=false;
  void note(QString s){log->append(QTime::currentTime().toString("HH:mm:ss")+"  "+s);}
@@ -83,6 +85,11 @@ public:
 form->addWidget(new QLabel("数据源"));form->addWidget(mode);
  auto diagnose=new QPushButton("设备诊断…");form->addWidget(diagnose);
  connect(diagnose,&QPushButton::clicked,this,[this]{showDeviceDiagnostics(this);});
+ auto discover=new QPushButton("发现并匹配 UVC 源…");form->addWidget(discover);
+ connect(discover,&QPushButton::clicked,this,[this]{
+  if(source&&!source->finished()){note("请先暂停采集，再发现设备");return;}
+  auto selected=chooseUvcPair(this);if(selected){selectedUvc=selected;note("已选择 UVC 组合："+describeUvcPair(*selected));}
+ });
  auto hint=new QLabel("当前预览与保存均为模拟数据");
  connect(mode,&QComboBox::currentIndexChanged,this,[this,hint](int){bool real=mode->currentData().toBool();badge->setText(real?"真实设备":"模拟设备");hint->setText(real?"UVC 模式 · 需开启深度输出\n程序不会修改设备配置":"当前预览与保存均为模拟数据");});hint->setWordWrap(true);hint->setStyleSheet("color:#52647b;font-size:12px");form->addWidget(hint);
  auto settings=new QFormLayout;settings->setHorizontalSpacing(8);settings->setVerticalSpacing(10);
@@ -107,8 +114,9 @@ form->addWidget(new QLabel("数据源"));form->addWidget(mode);
  setStyleSheet("QSplitter::handle{background:#dce3ec;border-radius:3px}QSplitter::handle:hover{background:#9ab9df}QMainWindow{background:#eef2f6;color:#182638}QGroupBox{background:white;border:1px solid #d5dfe9;border-radius:8px;margin-top:12px;padding-top:12px;font-weight:600}QGroupBox::title{subcontrol-origin:margin;left:12px}QPushButton{padding:9px 14px;border:1px solid #b9c8d8;border-radius:5px;background:white;color:#182638}QPushButton:hover{background:#e1edff}QPushButton:disabled{color:#8492a3;background:#edf0f4}QPushButton:focus{border:2px solid #246be0}QSpinBox,QComboBox,QLineEdit{padding:7px;border:1px solid #b9c8d8;border-radius:4px;background:white;color:#182638}QLabel{color:#24364d}QTextEdit{background:white;color:#40546c;border:1px solid #d5dfe9;border-radius:5px}");
  connect(&timer,&QTimer::timeout,this,[this]{tick();});connect(&recordTimer,&QTimer::timeout,this,[this]{save();});connect(start,&QPushButton::clicked,this,[this]{
   if(timer.isActive()){requestPause();return;}
+  if(mode->currentData().toBool()&&!selectedUvc){selectedUvc=chooseUvcPair(this,true);if(!selectedUvc)return;}
   frame.reset();cloud->frame.reset();rgb->image={};depth->image={};rgb->update();depth->update();cloud->update();snap->setEnabled(false);freshness.invalidate();lastMessage.clear();
-  source=mode->currentData().toBool()?createWindowsSource():std::make_unique<SimulatedSource>();
+  source=mode->currentData().toBool()?createWindowsSource(*selectedUvc):std::make_unique<SimulatedSource>();
   if(!source){note("此构建不包含 Windows SDK 后端");return;}
   mode->setEnabled(false);timer.start(1000/fps->value());start->setText("暂停采集");record->setEnabled(true);tick();
  });
@@ -135,7 +143,7 @@ int main(int argc,char**argv){
   QCoreApplication app(argc,argv);app.setApplicationName("DeepMirror Capture");
   QFile output(app.arguments().value(i+1));
   if(!output.open(QIODevice::WriteOnly|QIODevice::Truncate))return 1;
-  const auto report=collectDeviceDiagnostics().toUtf8();
+  const auto report=(collectDeviceDiagnostics()+"\n"+discoverUvcSources().report).toUtf8();
   return output.write(report)==report.size()?0:1;
  }
  QApplication app(argc,argv);app.setApplicationName("DeepMirror Capture");initializeSdkDiagnostics();

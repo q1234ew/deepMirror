@@ -1,4 +1,6 @@
 static std::vector<std::string> xuPathsForDevice() {
+    auto selected = deepmirrorSelectedControls();
+    if (!selected.empty()) return selected;
     std::vector<std::string> paths;
     auto add = [&paths](const std::string& p) {
         if (!p.empty() && std::find(paths.begin(), paths.end(), p) == paths.end()) paths.push_back(p);

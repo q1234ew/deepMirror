@@ -1,5 +1,6 @@
 #include "processing.h"
 #include "Insight9SDK.h"
+#include "sdk_uvc_paths.h"
 #include <QJsonArray>
 #include <atomic>
 #include <chrono>
@@ -44,6 +45,7 @@ bool loadCalibration(Calibration &out,QString &err){
  return true;
 }
 class WindowsSource final: public FrameSource {
+ UvcPair selection;
  std::atomic<bool> stop{false},done{false};std::thread worker;
  mutable std::mutex mutex;std::condition_variable cv;
  FramePairer pairer;std::shared_ptr<Frame> latest;QString message="正在初始化 Windows SDK…";
@@ -72,6 +74,12 @@ class WindowsSource final: public FrameSource {
 #else
    config.depth_config={544,640,30,PixelFormat::Z16};config.gray_config={544,640,30,PixelFormat::Y8I};
 #endif
+   config.rgb_config={selection.rgbFormat.width,selection.rgbFormat.height,selection.rgbFormat.fps,PixelFormat::MJPEG};
+   config.depth_config={selection.depthFormat.width,selection.depthFormat.height,selection.depthFormat.fps,PixelFormat::Z16};
+   config.gray_config={selection.depthFormat.width,selection.depthFormat.height,selection.depthFormat.fps,PixelFormat::GREY};
+   std::vector<std::string> controls;for(const auto &path:selection.controls)controls.push_back(path.toStdString());
+   deepmirrorSetUvcPaths(selection.rgb.path.toStdString(),selection.depth.path.toStdString(),controls);
+   report("已匹配 UVC 源："+describeUvcPair(selection));
    // The pinned SDK opens native UVC formats; no parameter/depth-enable writes are made.
    int result=insight9_receive_init(&config);initialized=true;
    fprintf(stderr,"[Capture] SDK init result=%d RGB present=%d depth present=%d\n",result,insight9_receive_has_camera(INSIGHT9_CAM_RGB),insight9_receive_has_camera(INSIGHT9_CAM_DEPTH));
@@ -82,6 +90,9 @@ class WindowsSource final: public FrameSource {
     Calibration calibration;QString error;
     if(!loadCalibration(calibration,error))report(error);
     else {
+     calibration.metadata.insert("uvc_rgb_path",selection.rgb.path);
+     calibration.metadata.insert("uvc_depth_path",selection.depth.path);
+     calibration.metadata.insert("uvc_physical_device",selection.rgb.physicalId);
      insight9_receive_register_image_callback(callback,this);
      if(insight9_receive_start())report("SDK 启动失败");
      else {
@@ -100,13 +111,14 @@ class WindowsSource final: public FrameSource {
    }
   }catch(const std::exception &e){report(QString("采集异常：%1").arg(e.what()));}catch(...){report("采集发生未知异常");}
   if(initialized){insight9_receive_stop();insight9_receive_register_image_callback(nullptr,nullptr);insight9_receive_cleanup();}
+  deepmirrorSetUvcPaths({},{},{});
   #ifdef _WIN32
   CoUninitialize();
 #endif
   done=true;
  }
 public:
- WindowsSource(){worker=std::thread([this]{run();});}
+ WindowsSource(const UvcPair &chosen):selection(chosen){worker=std::thread([this]{run();});}
  ~WindowsSource()override{requestStop();if(worker.joinable())worker.join();}
  void requestStop()override{stop=true;cv.notify_all();}
  bool finished()const override{return done;}
@@ -114,4 +126,4 @@ public:
  QString status()const override{std::lock_guard<std::mutex> lock(mutex);return message;}
 };
 }
-std::unique_ptr<FrameSource> createWindowsSource(){return std::make_unique<WindowsSource>();}
+std::unique_ptr<FrameSource> createWindowsSource(const UvcPair &selection){return std::make_unique<WindowsSource>(selection);}
