@@ -134,6 +134,14 @@ form->addWidget(new QLabel("数据源"));form->addWidget(mode);
  void demo(QString screenshot){start->click();QTimer::singleShot(1200,this,[this,screenshot]{if(!screenshot.isEmpty())grab().save(screenshot);});}
 };
 int main(int argc,char**argv){
+ for(int i=1;i<argc;++i)if(QString::fromLocal8Bit(argv[i])=="--diagnostics-self-test"){
+  QCoreApplication app(argc,argv);app.setApplicationName("DeepMirror Capture Log Test");initializeSdkDiagnostics();
+  if(sdkDiagnosticPath().isEmpty())return 1;
+  fprintf(stdout,"stdout diagnostic probe\n");fprintf(stderr,"stderr diagnostic probe\n");fflush(stdout);fflush(stderr);
+  QFile logFile(sdkDiagnosticPath());if(!logFile.open(QIODevice::ReadOnly))return 1;
+  const auto content=logFile.readAll();const bool ok=content.contains("stdout diagnostic probe")&&content.contains("stderr diagnostic probe");
+  logFile.close();QFile::remove(sdkDiagnosticPath());return ok?0:1;
+ }
  // Data self-tests do not construct a GUI or require a platform/OpenGL plugin.
  for(int i=1;i<argc;++i)if(QString::fromLocal8Bit(argv[i])=="--self-test"){
   QCoreApplication app(argc,argv);

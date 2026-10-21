@@ -1,4 +1,5 @@
 #include "uvc_discovery.h"
+#include "windows_device_path.h"
 #include <QCoreApplication>
 #include <iostream>
 #define CHECK(c) do{if(!(c)){std::cerr<<"FAIL line "<<__LINE__<<": "<<#c<<'\n';return 1;}}while(false)
@@ -6,6 +7,12 @@ UvcSource source(QString id,QString physical,QVector<UvcFormat> formats) {
  return {"UVC Camera","\\\\?\\usb#vid_3652&pid_0104&mi_"+id+"#"+physical,physical,{},formats};
 }
 int main(int argc,char **argv){QCoreApplication app(argc,argv);
+ const std::string mf="\\\\?\\usb#vid_3652&pid_0104&mi_02#instance-a#{camera-guid}\\global";
+ const std::string ds="@device:pnp:\\\\?\\USB#VID_3652&PID_0104&MI_02#INSTANCE-A#{capture-guid}\\global";
+ CHECK(sameWindowsVideoFunction(mf,ds));
+ auto different=ds;different.replace(different.find("MI_02"),5,"MI_06");CHECK(!sameWindowsVideoFunction(mf,different));
+ different=ds;different.replace(different.find("INSTANCE-A"),10,"INSTANCE-B");CHECK(!sameWindowsVideoFunction(mf,different));
+ CHECK(!sameWindowsVideoFunction("UVC Camera","UVC Camera"));
  const UvcFormat rgb{"MJPG",1088,1920,30,0},dep{"Z16",544,642,30,0};
  auto a=source("02","physical-A",{rgb}),b=source("06","physical-A",{dep});
  auto gray=source("04","physical-A",{{"Y800",544,1281,20,0}});
