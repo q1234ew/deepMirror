@@ -8,6 +8,8 @@ UvcSource source(QString id,QString physical,QVector<UvcFormat> formats) {
  return {"UVC Camera","\\\\?\\usb#vid_3652&pid_0104&mi_"+id+"#"+physical,physical,{},formats};
 }
 int main(int argc,char **argv){QCoreApplication app(argc,argv);
+ uint8_t setList[48]{};setList[0]=42;setList[16]=43;setList[32]=42;
+ CHECK(parseXuPropertySets(setList,48).size()==2);CHECK(parseXuPropertySets(setList,47).empty());CHECK(parseXuPropertySets(nullptr,0).empty());
  uint8_t descriptor[20]={1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,24,2,1,2},guid[16]{};
  CHECK(parseXuDescriptorGuid(descriptor,sizeof(descriptor),guid));CHECK(std::memcmp(guid,descriptor,16)==0);
  CHECK(!parseXuDescriptorGuid(descriptor,19,guid));CHECK(!parseXuDescriptorGuid(nullptr,20,guid));
