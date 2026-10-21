@@ -1,0 +1,83 @@
+name: Windows build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  windows-x64:
+    runs-on: windows-2022
+    timeout-minutes: 35
+    steps:
+      - name: Checkout
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Install Qt 6.8.2 MSVC x64
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
+        with:
+          version: '6.8.2'
+          host: windows
+          target: desktop
+          arch: win64_msvc2022_64
+          cache: true
+
+      - name: Build, test and deploy Qt
+        shell: pwsh
+        run: ./scripts/build-windows.ps1 -QtRoot $env:QT_ROOT_DIR
+
+      - name: Prepare portable package
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          New-Item -ItemType Directory -Force dist | Out-Null
+          Get-ChildItem build-windows/Release | Where-Object {
+            $_.Name -notmatch '\.(lib|exp|pdb|ilk)$' -and $_.Name -ne 'processing_test.exe'
+          } | Copy-Item -Destination dist -Recurse
+          Copy-Item README.md dist/README.md
+          @{
+            commit = '${{ github.sha }}'
+            qt = '6.8.2'
+            sdk = '58395177ba3ecd077309e87549022fdcec3a9a4f'
+            usb_layout = 'Insight7 PID 3652:0104 RGB MI_02 / depth MI_06'
+            hardware_tested = $false
+          } | ConvertTo-Json | Set-Content dist/build-info.json -Encoding utf8
+
+      - name: Smoke test packaged application
+        shell: pwsh
+        run: |
+          # Remove Qt's development paths so missing deployed DLLs/plugins are detected.
+          $env:PATH = (($env:PATH -split ';') | Where-Object { $_ -notlike "$env:QT_ROOT_DIR*" }) -join ';'
+          Remove-Item Env:QT_PLUGIN_PATH -ErrorAction SilentlyContinue
+          Remove-Item Env:QML2_IMPORT_PATH -ErrorAction SilentlyContinue
+          $env:QT_QPA_PLATFORM = 'offscreen'
+          $process = Start-Process -FilePath "$PWD/dist/deepmirror.exe" -ArgumentList '--self-test', "$PWD/build-windows/package-test" -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Packaged application test failed: $($process.ExitCode)" }
+
+      - name: Upload Windows application
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: DeepMirror-Windows-x64-${{ github.run_number }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Upload test diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: Windows-build-diagnostics-${{ github.run_number }}
+          path: |
+            build-windows/Testing/Temporary/
+            build-windows/CMakeFiles/CMakeConfigureLog.yaml
+          if-no-files-found: ignore
+          retention-days: 7
