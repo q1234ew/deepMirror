@@ -1,5 +1,6 @@
 #include "uvc_discovery.h"
 #include "windows_device_path.h"
+#include "xu_descriptor.h"
 #include <QCoreApplication>
 #include <iostream>
 #define CHECK(c) do{if(!(c)){std::cerr<<"FAIL line "<<__LINE__<<": "<<#c<<'\n';return 1;}}while(false)
@@ -7,6 +8,11 @@ UvcSource source(QString id,QString physical,QVector<UvcFormat> formats) {
  return {"UVC Camera","\\\\?\\usb#vid_3652&pid_0104&mi_"+id+"#"+physical,physical,{},formats};
 }
 int main(int argc,char **argv){QCoreApplication app(argc,argv);
+ uint8_t descriptor[20]={1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16,24,2,1,2},guid[16]{};
+ CHECK(parseXuDescriptorGuid(descriptor,sizeof(descriptor),guid));CHECK(std::memcmp(guid,descriptor,16)==0);
+ CHECK(!parseXuDescriptorGuid(descriptor,19,guid));CHECK(!parseXuDescriptorGuid(nullptr,20,guid));
+ descriptor[16]=0;CHECK(!parseXuDescriptorGuid(descriptor,20,guid));descriptor[16]=24;
+ std::memset(descriptor,0,16);CHECK(!parseXuDescriptorGuid(descriptor,20,guid));
  const std::string mf="\\\\?\\usb#vid_3652&pid_0104&mi_02#instance-a#{camera-guid}\\global";
  const std::string ds="@device:pnp:\\\\?\\USB#VID_3652&PID_0104&MI_02#INSTANCE-A#{capture-guid}\\global";
  CHECK(sameWindowsVideoFunction(mf,ds));
