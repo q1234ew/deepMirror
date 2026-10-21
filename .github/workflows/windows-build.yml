@@ -46,6 +46,7 @@ jobs:
             $_.Name -notmatch '\.(lib|exp|pdb|ilk)$' -and $_.Name -ne 'processing_test.exe'
           } | Copy-Item -Destination dist -Recurse
           Copy-Item README.md dist/README.md
+          ./scripts/package-docs.ps1 -PackageDir "$PWD/dist"
           @{
             commit = '${{ github.sha }}'
             qt = '6.8.2'

@@ -1,6 +1,14 @@
 $ErrorActionPreference = 'Stop'
 $zip = Join-Path $PWD 'build-windows/DeepMirror-Windows-x64.zip'
 Compress-Archive -Path dist/* -DestinationPath $zip -Force
+# Inspect the actual ZIP rather than relying only on staging-directory copies.
+$archive = [System.IO.Compression.ZipFile]::OpenRead($zip)
+try {
+    foreach ($required in @('README.md', 'docs/windows-camera-test.md', 'Windows-Camera-Test.html')) {
+        $entry = $archive.Entries | Where-Object { $_.FullName.Replace('\', '/') -eq $required }
+        if (-not $entry -or $entry.Length -eq 0) { throw "Missing packaged document: $required" }
+    }
+} finally { $archive.Dispose() }
 $checksum = "$zip.sha256"
 "$((Get-FileHash $zip -Algorithm SHA256).Hash.ToLower())  DeepMirror-Windows-x64.zip" | Set-Content $checksum -Encoding ascii
 $notes = Join-Path $PWD 'build-windows/release-notes.md'
@@ -10,6 +18,7 @@ $notes = Join-Path $PWD 'build-windows/release-notes.md'
     "Commit: $env:GITHUB_SHA",
     'Qt 6.8.2 / MSVC x64 / Insight7 PID 3652:0104.',
     'Windows compilation, offline tests and packaged data self-test passed.',
+    'Offline camera test instructions: open Windows-Camera-Test.html beside deepmirror.exe. Markdown source is included in docs/windows-camera-test.md.',
     'Real camera capture still requires hardware validation. Enable depth output manually.',
     '',
     'Published as a prerelease; repository visibility is unchanged.'
