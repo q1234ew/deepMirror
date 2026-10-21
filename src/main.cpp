@@ -6,6 +6,9 @@
 #include <QOpenGLWidget>
 #include <QtConcurrent>
 #include <cmath>
+#ifdef _WIN32
+#include <io.h>
+#endif
 class ImageView:public QWidget {
 public:
  QImage image;
@@ -135,12 +138,26 @@ form->addWidget(new QLabel("数据源"));form->addWidget(mode);
 };
 int main(int argc,char**argv){
  for(int i=1;i<argc;++i)if(QString::fromLocal8Bit(argv[i])=="--diagnostics-self-test"){
+#ifdef _WIN32
+  const int feedback=_dup(_fileno(stdout));
+#endif
   QCoreApplication app(argc,argv);app.setApplicationName("DeepMirror Capture Log Test");initializeSdkDiagnostics();
-  if(sdkDiagnosticPath().isEmpty())return 1;
-  fprintf(stdout,"stdout diagnostic probe\n");fprintf(stderr,"stderr diagnostic probe\n");fflush(stdout);fflush(stderr);
-  QFile logFile(sdkDiagnosticPath());if(!logFile.open(QIODevice::ReadOnly))return 1;
-  const auto content=logFile.readAll();const bool ok=content.contains("stdout diagnostic probe")&&content.contains("stderr diagnostic probe");
-  logFile.close();QFile::remove(sdkDiagnosticPath());return ok?0:1;
+  const int outResult=fprintf(stdout,"stdout diagnostic probe\n");
+  const int errResult=fprintf(stderr,"stderr diagnostic probe\n");fflush(stdout);fflush(stderr);
+#ifdef _WIN32
+  // Close both writers before reading; some Windows CRT sharing modes reject a second open.
+  FILE *stream=nullptr;_wfreopen_s(&stream,L"NUL",L"w",stdout);_wfreopen_s(&stream,L"NUL",L"w",stderr);
+#endif
+  QFile logFile(sdkDiagnosticPath());const bool opened=logFile.open(QIODevice::ReadOnly);
+  const auto content=opened?logFile.readAll():QByteArray();
+  const bool ok=opened&&content.contains("stdout diagnostic probe")&&content.contains("stderr diagnostic probe");
+#ifdef _WIN32
+  if(feedback>=0){
+   const auto result=(QString("SDK log self-test: opened=%1 stdout=%2 stderr=%3 path=%4 error=%5\n").arg(opened).arg(outResult).arg(errResult).arg(sdkDiagnosticPath(),logFile.errorString()).toUtf8()+content);
+   _write(feedback,result.constData(),unsigned(result.size()));_close(feedback);
+  }
+#endif
+  logFile.close();if(ok)QFile::remove(sdkDiagnosticPath());return ok?0:1;
  }
  // Data self-tests do not construct a GUI or require a platform/OpenGL plugin.
  for(int i=1;i<argc;++i)if(QString::fromLocal8Bit(argv[i])=="--self-test"){
