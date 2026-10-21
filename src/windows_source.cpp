@@ -20,7 +20,10 @@ QJsonObject describe(const camera_calib &c){QJsonArray t,q;for(double v:c.extrin
 CameraModel model(const camera_calib &c){return {int(c.intrinsics.width),int(c.intrinsics.height),c.intrinsics.k[0],c.intrinsics.k[4],c.intrinsics.k[2],c.intrinsics.k[5]};}
 bool loadCalibration(Calibration &out,QString &err){
  camera_calib l{},r{};
- if(insight9_receive_get_camera_calib(INSIGHT9_CALIB_CAM_LEFT,&l)||insight9_receive_get_camera_calib(INSIGHT9_CALIB_CAM_RGB,&r)){err="无法读取左右/RGB 标定，请确认固件和 UVC 扩展控制可用";return false;}
+ const int leftResult=insight9_receive_get_camera_calib(INSIGHT9_CALIB_CAM_LEFT,&l);
+ const int rgbResult=insight9_receive_get_camera_calib(INSIGHT9_CALIB_CAM_RGB,&r);
+ fprintf(stderr,"[Capture] Calibration results: left(selector 0x14)=%d RGB(selector 0x16)=%d\n",leftResult,rgbResult);
+ if(leftResult||rgbResult){err=QString("标定读取失败：左目返回 %1，RGB 返回 %2；请查看底部 SDK 日志目录").arg(leftResult).arg(rgbResult);return false;}
  // Rectified projection is the vendor alignment API's contract. Reject other models.
  for(const auto *c:{&l,&r}){
   if(std::abs(c->intrinsics.p[3])>.01||std::abs(c->intrinsics.p[7])>.01||std::abs(c->intrinsics.p[11])>.01){err="不支持非零投影平移的标定";return false;}
@@ -45,7 +48,7 @@ class WindowsSource final: public FrameSource {
  mutable std::mutex mutex;std::condition_variable cv;
  FramePairer pairer;std::shared_ptr<Frame> latest;QString message="正在初始化 Windows SDK…";
  quint64 callbacks=0,rejected=0,sequence=0;
- void report(const QString &s){std::lock_guard<std::mutex> lock(mutex);message=s;}
+ void report(const QString &s){fprintf(stderr,"[Capture] %s\n",s.toUtf8().constData());std::lock_guard<std::mutex> lock(mutex);message=s;}
  static void callback(int id,uint8_t*data,size_t size,int w,int h,unsigned fmt,uint64_t ts,void*user) noexcept {
   auto self=static_cast<WindowsSource*>(user);
   if(self->stop||!data||(id!=INSIGHT9_CAM_RGB&&id!=INSIGHT9_CAM_DEPTH))return;
@@ -71,6 +74,7 @@ class WindowsSource final: public FrameSource {
 #endif
    // The pinned SDK opens native UVC formats; no parameter/depth-enable writes are made.
    int result=insight9_receive_init(&config);initialized=true;
+   fprintf(stderr,"[Capture] SDK init result=%d RGB present=%d depth present=%d\n",result,insight9_receive_has_camera(INSIGHT9_CAM_RGB),insight9_receive_has_camera(INSIGHT9_CAM_DEPTH));
    if(result){report("SDK 初始化失败，请检查驱动、设备连接与 USB 模式");}
    else {
     Calibration calibration;QString error;

@@ -1,4 +1,5 @@
 #include "capture.h"
+#include "diagnostics.h"
 #include <QtWidgets>
 #include <QOpenGLWidget>
 #include <QtConcurrent>
@@ -92,7 +93,12 @@ form->addWidget(new QLabel("数据源"));form->addWidget(mode);
  auto desc=new QLabel("RGB PNG  ·  16 位深度 PNG\n彩色点云 PLY  ·  元数据 JSON");desc->setWordWrap(true);desc->setStyleSheet("font-size:12px;color:#52647b");form->addWidget(desc);form->addStretch();
  auto tips=new QLabel("深度单位 mm · 点云单位 m\n连续保存繁忙时跳过当前请求");tips->setWordWrap(true);tips->setStyleSheet("font-size:12px;color:#52647b");form->addWidget(tips);body->addWidget(side);outer->addLayout(body,1);
  auto footer=new QHBoxLayout;stats=new QLabel("尚无数据");stats->setStyleSheet("font-size:12px;color:#40546c");footer->addWidget(stats,1);
- auto logToggle=new QToolButton;logToggle->setText("日志");logToggle->setCheckable(true);logToggle->setArrowType(Qt::RightArrow);logToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);footer->addWidget(logToggle);outer->addLayout(footer);
+ auto logToggle=new QToolButton;logToggle->setText("日志");logToggle->setCheckable(true);logToggle->setArrowType(Qt::RightArrow);logToggle->setToolButtonStyle(Qt::ToolButtonTextBesideIcon);footer->addWidget(logToggle);
+ if(!sdkDiagnosticPath().isEmpty()){
+  auto openLogs=new QToolButton;openLogs->setText("打开 SDK 日志目录");footer->addWidget(openLogs);
+  connect(openLogs,&QToolButton::clicked,this,[]{QDesktopServices::openUrl(QUrl::fromLocalFile(QFileInfo(sdkDiagnosticPath()).absolutePath()));});
+ }
+ outer->addLayout(footer);
  log=new QTextEdit;log->setReadOnly(true);log->document()->setMaximumBlockCount(1000);log->setFixedHeight(88);log->setAccessibleName("采集日志");log->hide();outer->addWidget(log);
  connect(logToggle,&QToolButton::toggled,this,[this,logToggle](bool on){log->setVisible(on);logToggle->setArrowType(on?Qt::DownArrow:Qt::RightArrow);});
  setStyleSheet("QSplitter::handle{background:#dce3ec;border-radius:3px}QSplitter::handle:hover{background:#9ab9df}QMainWindow{background:#eef2f6;color:#182638}QGroupBox{background:white;border:1px solid #d5dfe9;border-radius:8px;margin-top:12px;padding-top:12px;font-weight:600}QGroupBox::title{subcontrol-origin:margin;left:12px}QPushButton{padding:9px 14px;border:1px solid #b9c8d8;border-radius:5px;background:white;color:#182638}QPushButton:hover{background:#e1edff}QPushButton:disabled{color:#8492a3;background:#edf0f4}QPushButton:focus{border:2px solid #246be0}QSpinBox,QComboBox,QLineEdit{padding:7px;border:1px solid #b9c8d8;border-radius:4px;background:white;color:#182638}QLabel{color:#24364d}QTextEdit{background:white;color:#40546c;border:1px solid #d5dfe9;border-radius:5px}");
@@ -106,6 +112,7 @@ form->addWidget(new QLabel("数据源"));form->addWidget(mode);
  connect(snap,&QPushButton::clicked,this,[this]{save();});connect(record,&QPushButton::clicked,this,[this]{if(recording){stopRecord();note("连续保存已停止");}else{recording=true;record->setText("停止连续保存");recordTimer.start(interval->value());save();note("连续保存已开启");}});
  connect(fps,&QSpinBox::valueChanged,this,[this](int n){if(timer.isActive())timer.setInterval(1000/n);});connect(interval,&QSpinBox::valueChanged,this,[this](int n){recordTimer.setInterval(n);});connect(choose,&QPushButton::clicked,this,[this]{auto d=QFileDialog::getExistingDirectory(this,"选择保存目录",path->text());if(!d.isEmpty())path->setText(d);});
  connect(&writer,&QFutureWatcher<QString>::finished,this,[this]{auto err=writer.result();snap->setEnabled(bool(frame)&&!stopping&&(!timer.isActive()||!freshness.isValid()||freshness.elapsed()<=3000));if(err.isEmpty()){++saved;note(QString("已保存第 %1 组 RGB / 深度 / 点云").arg(saved));}else{stopRecord();note("保存失败："+err);}status->setText(err.isEmpty()?(timer.isActive()&&source?source->status():"已暂停"):"保存失败，请查看日志");if(pendingClose)close();});note("模拟后端就绪。空格启动 / 暂停，Ctrl/Cmd+S 保存。");
+ if(!sdkDiagnosticPath().isEmpty())note("底层 SDK 诊断日志："+sdkDiagnosticPath());
  }
  void closeEvent(QCloseEvent*e)override{
   stopRecord();
@@ -121,7 +128,7 @@ int main(int argc,char**argv){
   QCoreApplication app(argc,argv);
   return selfTest(app.arguments().value(i+1,QDir::tempPath()+"/deepmirror-test"));
  }
- QApplication app(argc,argv);app.setApplicationName("DeepMirror Capture");
+ QApplication app(argc,argv);app.setApplicationName("DeepMirror Capture");initializeSdkDiagnostics();
  auto args=app.arguments();Window w;w.show();
  if(args.contains("--screenshot"))w.demo(args.value(args.indexOf("--screenshot")+1));
  return app.exec();
