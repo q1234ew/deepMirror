@@ -115,4 +115,14 @@ form->addWidget(new QLabel("数据源"));form->addWidget(mode);
  }
  void demo(QString screenshot){start->click();QTimer::singleShot(1200,this,[this,screenshot]{if(!screenshot.isEmpty())grab().save(screenshot);});}
 };
-int main(int argc,char**argv){QApplication app(argc,argv);app.setApplicationName("DeepMirror Capture");auto args=app.arguments();if(args.contains("--self-test")){int i=args.indexOf("--self-test");return selfTest(args.value(i+1,QDir::tempPath()+"/deepmirror-test"));}Window w;w.show();if(args.contains("--screenshot"))w.demo(args.value(args.indexOf("--screenshot")+1));return app.exec();}
+int main(int argc,char**argv){
+ // Data self-tests do not construct a GUI or require a platform/OpenGL plugin.
+ for(int i=1;i<argc;++i)if(QString::fromLocal8Bit(argv[i])=="--self-test"){
+  QCoreApplication app(argc,argv);
+  return selfTest(app.arguments().value(i+1,QDir::tempPath()+"/deepmirror-test"));
+ }
+ QApplication app(argc,argv);app.setApplicationName("DeepMirror Capture");
+ auto args=app.arguments();Window w;w.show();
+ if(args.contains("--screenshot"))w.demo(args.value(args.indexOf("--screenshot")+1));
+ return app.exec();
+}

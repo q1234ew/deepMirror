@@ -59,8 +59,17 @@ jobs:
           $env:PATH = (($env:PATH -split ';') | Where-Object { $_ -notlike "$env:QT_ROOT_DIR*" }) -join ';'
           Remove-Item Env:QT_PLUGIN_PATH -ErrorAction SilentlyContinue
           Remove-Item Env:QML2_IMPORT_PATH -ErrorAction SilentlyContinue
-          $env:QT_QPA_PLATFORM = 'offscreen'
-          $process = Start-Process -FilePath "$PWD/dist/deepmirror.exe" -ArgumentList '--self-test', "$PWD/build-windows/package-test" -Wait -PassThru
+          $stdout = "$PWD/build-windows/package-stdout.log"
+          $stderr = "$PWD/build-windows/package-stderr.log"
+          Get-ChildItem dist -Recurse | Select-Object FullName
+          $process = Start-Process -FilePath "$PWD/dist/deepmirror.exe" -ArgumentList '--self-test', "$PWD/build-windows/package-test" -PassThru -RedirectStandardOutput $stdout -RedirectStandardError $stderr
+          if (-not $process.WaitForExit(60000)) {
+            Stop-Process -Id $process.Id -Force
+            Get-Content $stdout, $stderr -ErrorAction SilentlyContinue
+            throw 'Packaged application did not exit within 60 seconds'
+          }
+          $process.Refresh()
+          Get-Content $stdout, $stderr -ErrorAction SilentlyContinue
           if ($process.ExitCode -ne 0) { throw "Packaged application test failed: $($process.ExitCode)" }
 
       - name: Upload Windows application
@@ -77,6 +86,7 @@ jobs:
         with:
           name: Windows-build-diagnostics-${{ github.run_number }}
           path: |
+            build-windows/package-*.log
             build-windows/Testing/Temporary/
             build-windows/CMakeFiles/CMakeConfigureLog.yaml
           if-no-files-found: ignore
