@@ -74,6 +74,17 @@ jobs:
           $process.Refresh()
           Get-Content $stdout, $stderr -ErrorAction SilentlyContinue
           if ($process.ExitCode -ne 0) { throw "Packaged application test failed: $($process.ExitCode)" }
+          # Exercise the native read-only device inventory even on a runner without a camera.
+          $inventory = "$PWD/build-windows/device-diagnostics.txt"
+          $probe = Start-Process -FilePath "$PWD/dist/deepmirror.exe" -ArgumentList '--device-diagnostics', $inventory -PassThru
+          if (-not $probe.WaitForExit(60000)) {
+            Stop-Process -Id $probe.Id -Force
+            throw 'Device diagnostics did not exit within 60 seconds'
+          }
+          $probe.Refresh()
+          if ($probe.ExitCode -ne 0) { throw "Device diagnostics failed: $($probe.ExitCode)" }
+          $report = Get-Content $inventory -Raw -Encoding utf8
+          if ($report -notmatch 'DirectShow' -or $report -notmatch 'VID_3652') { throw 'Device diagnostics report is incomplete' }
 
       - name: Publish private repository build download
         if: github.event_name != 'pull_request'
@@ -101,6 +112,7 @@ jobs:
           name: Windows-build-diagnostics-${{ github.run_number }}
           path: |
             build-windows/package-*.log
+            build-windows/device-diagnostics.txt
             build-windows/Testing/Temporary/
             build-windows/CMakeFiles/CMakeConfigureLog.yaml
           if-no-files-found: ignore

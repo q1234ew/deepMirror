@@ -1,5 +1,6 @@
 #include "capture.h"
 #include "diagnostics.h"
+#include "device_diagnostics.h"
 #include <QtWidgets>
 #include <QOpenGLWidget>
 #include <QtConcurrent>
@@ -80,6 +81,8 @@ public:
  mode->addItem("Insight 相机 / Windows SDK",true);
 #endif
 form->addWidget(new QLabel("数据源"));form->addWidget(mode);
+ auto diagnose=new QPushButton("设备诊断…");form->addWidget(diagnose);
+ connect(diagnose,&QPushButton::clicked,this,[this]{showDeviceDiagnostics(this);});
  auto hint=new QLabel("当前预览与保存均为模拟数据");
  connect(mode,&QComboBox::currentIndexChanged,this,[this,hint](int){bool real=mode->currentData().toBool();badge->setText(real?"真实设备":"模拟设备");hint->setText(real?"UVC 模式 · 需开启深度输出\n程序不会修改设备配置":"当前预览与保存均为模拟数据");});hint->setWordWrap(true);hint->setStyleSheet("color:#52647b;font-size:12px");form->addWidget(hint);
  auto settings=new QFormLayout;settings->setHorizontalSpacing(8);settings->setVerticalSpacing(10);
@@ -127,6 +130,13 @@ int main(int argc,char**argv){
  for(int i=1;i<argc;++i)if(QString::fromLocal8Bit(argv[i])=="--self-test"){
   QCoreApplication app(argc,argv);
   return selfTest(app.arguments().value(i+1,QDir::tempPath()+"/deepmirror-test"));
+ }
+ for(int i=1;i<argc;++i)if(QString::fromLocal8Bit(argv[i])=="--device-diagnostics"){
+  QCoreApplication app(argc,argv);app.setApplicationName("DeepMirror Capture");
+  QFile output(app.arguments().value(i+1));
+  if(!output.open(QIODevice::WriteOnly|QIODevice::Truncate))return 1;
+  const auto report=collectDeviceDiagnostics().toUtf8();
+  return output.write(report)==report.size()?0:1;
  }
  QApplication app(argc,argv);app.setApplicationName("DeepMirror Capture");initializeSdkDiagnostics();
  auto args=app.arguments();Window w;w.show();

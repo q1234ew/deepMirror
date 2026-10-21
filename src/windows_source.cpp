@@ -76,7 +76,9 @@ class WindowsSource final: public FrameSource {
    int result=insight9_receive_init(&config);initialized=true;
    fprintf(stderr,"[Capture] SDK init result=%d RGB present=%d depth present=%d\n",result,insight9_receive_has_camera(INSIGHT9_CAM_RGB),insight9_receive_has_camera(INSIGHT9_CAM_DEPTH));
    if(result){report("SDK 初始化失败，请检查驱动、设备连接与 USB 模式");}
-   else {
+   else if(!insight9_receive_has_camera(INSIGHT9_CAM_RGB)||!insight9_receive_has_camera(INSIGHT9_CAM_DEPTH)) {
+    report("SDK 未找到所需的 RGB / 深度接口；请点击右侧“设备诊断…”查看 Windows 设备与视频输入列表");
+   } else {
     Calibration calibration;QString error;
     if(!loadCalibration(calibration,error))report(error);
     else {
