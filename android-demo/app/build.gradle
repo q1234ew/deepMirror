@@ -1,0 +1,30 @@
+apply plugin: 'com.android.application'
+android {
+    namespace 'com.deepmirror.usbcheck'
+    compileSdk 34
+    defaultConfig {
+        applicationId 'com.deepmirror.usbcheck'
+        minSdk 26
+        targetSdk 34
+        versionCode 1
+        versionName '0.1.0'
+    }
+    buildFeatures { buildConfig true }
+    compileOptions { sourceCompatibility JavaVersion.VERSION_17; targetCompatibility JavaVersion.VERSION_17 }
+}
+tasks.register('compileDescriptorChecks', JavaCompile) {
+    source files('src/main/java/com/deepmirror/usbcheck/DescriptorParser.java', '../tests/DescriptorParserTest.java')
+    classpath = files()
+    destinationDirectory = layout.buildDirectory.dir('descriptor-checks')
+    sourceCompatibility = '17'
+    targetCompatibility = '17'
+    options.encoding = 'UTF-8'
+}
+tasks.register('descriptorChecks', JavaExec) {
+    dependsOn 'compileDescriptorChecks'
+    classpath = files(layout.buildDirectory.dir('descriptor-checks'))
+    mainClass = 'com.deepmirror.usbcheck.DescriptorParserTest'
+}
+tasks.named('check') { dependsOn 'descriptorChecks' }
+
+dependencies { implementation 'androidx.core:core:1.13.1' }
